@@ -1,0 +1,11 @@
+email:
+  from: from@qq.com
+  password: xxxx
+  server: smtp.qq.com
+  port: 25
+  to: to@qq.com
+attentions:
+  1671977403: "LookLana"
+sub_url: https://passport.weibo.com/visitor/visitor?a=incarnate&t=h2b7xQtQwqk2cEjMgH/0AaWYvpijlgCCAs3qDzj2W58=&w=3&c&cb=restore_back&from=weibo
+interval: 3600 # 单位：秒
+start_offset: 3600 # 单位：秒
