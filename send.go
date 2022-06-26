@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -35,9 +36,32 @@ var globalEndTime = time.Now().Unix()
 var logger *logrus.Logger
 var weiboSender sender.Sender
 
+var currentLogFile string
+
+func setLogoutput() {
+	logFileNow := logFileNow()
+	if currentLogFile != logFileNow {
+		file, err := os.OpenFile(logFileNow, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			logger.Fatal(err)
+		}
+		writers := []io.Writer{file}
+		fileAndStdoutWriter := io.MultiWriter(writers...)
+		logger.SetOutput(fileAndStdoutWriter)
+		currentLogFile = logFileNow
+	}
+}
+
+func logFileNow() string {
+	now := time.Now()
+	// file := fmt.Sprintf("weibo-notify_%d_%d", now.Year(), now.Month())
+	file := fmt.Sprintf("%d_%d_%d_weibo-notify.log", now.Year(), now.Month(), now.Day())
+	return file
+}
+
 func loadConfig() {
 	logger = &logrus.Logger{
-		Out:   os.Stderr,
+		// Out:   os.Stderr,
 		Level: logrus.DebugLevel,
 		Formatter: &prefixed.TextFormatter{
 			TimestampFormat: "2006-01-02 15:04:05",
@@ -45,6 +69,7 @@ func loadConfig() {
 			ForceFormatting: true,
 		},
 	}
+	setLogoutput()
 	configFilePath := flag.String("config", "config.yml", "config file")
 	if configFilePath != nil {
 		configFile, err := ioutil.ReadFile(*configFilePath)
@@ -72,6 +97,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
+				setLogoutput()
 				checkAndSend()
 			}
 		}
