@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -102,9 +103,14 @@ func main() {
 			}
 		}
 	}()
+	var s os.Signal
+	defer func() {
+		logrus.Info("got shutdown signal %s", s)
+	}()
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
-	<-shutdown
+	s = <-shutdown
+	logger.Info("got shutdown signal %s", s)
 }
 
 func checkAndSend() {
@@ -163,11 +169,12 @@ func latestBlog(uid int64, cookie string) (blogs []Blog) {
 		req.Header.Add("sec-fetch-dest", "empty")
 		req.Header.Add("sec-fetch-mode", "cors")
 		req.Header.Add("sec-fetch-site", "same-origin")
-		req.Header.Add("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36")
+		req.Header.Add("user-agent",
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36")
 		req.Header.Add("x-requested-with", "XMLHttpRequest")
 		resp, err := client.Do(req)
 		if err != nil {
-			logger.Errorf("get blof error", err)
+			logger.Errorf("get blog error", err)
 		}
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
@@ -192,18 +199,23 @@ func latestBlog(uid int64, cookie string) (blogs []Blog) {
 			content := fmt.Sprintf(`<a href="%s">原微博</a>`, rawWeiboURL)
 			content += "<br>"
 			content += v.Text
+			if strings.HasSuffix(content, "展开</span>") {
+				if newContent := contentDetail(v.Mblogid); newContent != "" {
+					content = newContent
+				}
+			}
 			content += "<br>"
 
 			if len(v.PicInfos) != 0 {
 				for k, info := range v.PicInfos {
-					picURL := info.Bmiddle.URL
+					picURL := info.Original.URL
 					content += fmt.Sprintf(`<img src="%s"  alt="%s" />`, picURL, k)
 				}
 			}
 			picURL := "https://wx2.sinaimg.cn/wap360/"
 			if len(v.PicIds) != 0 {
 				for _, p := range v.PicIds {
-					if v.PicInfos[p].Bmiddle.URL == "" {
+					if v.PicInfos[p].Original.URL == "" {
 						pic := picURL + p + ".jpg"
 						content += fmt.Sprintf(`<img src="%s"  alt="%s" />`, pic, p)
 					}
@@ -221,7 +233,7 @@ func latestBlog(uid int64, cookie string) (blogs []Blog) {
 				content += "<br>"
 				if len(rs.PicInfos) != 0 {
 					for k, info := range rs.PicInfos {
-						picURL := info.Bmiddle.URL
+						picURL := info.Original.URL
 						content += fmt.Sprintf(`<img src="%s"  alt="%s" />`, picURL, k)
 					}
 				}
@@ -329,4 +341,57 @@ type picInfo struct {
 	PicStatus int    `json:"pic_status"`
 }
 
-// TODO: 有的微博默认折叠了，需要展开
+func contentDetail(mblogid string) string {
+	cookie := getCookie()
+	url := fmt.Sprintf("https://weibo.com/ajax/statuses/longtext?id=%s", mblogid)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Add("accept", "application/json, text/plain, */*")
+	req.Header.Add("accept-language", "en-US,en;q=0.9")
+	req.Header.Add("cookie", cookie)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Errorf("get blog error", err)
+		return ""
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		logger.Errorf("read body error", err)
+		return ""
+	}
+	var moreInfo MoreInfo
+	err = json.Unmarshal(body, &moreInfo)
+	if err != nil {
+		logger.Errorf("unmarshal body %s", string(body), " error", err)
+		return ""
+	}
+	content := moreInfo.Data.LongTextContent
+	return strings.Replace(content, "\n", "<br />", -1)
+}
+
+type MoreInfo struct {
+	Ok       int `json:"ok"`
+	HTTPCode int `json:"http_code"`
+	Data     struct {
+		LongTextContent string `json:"longTextContent"`
+		TopicStruct     []struct {
+			Title      string `json:"title"`
+			TopicURL   string `json:"topic_url"`
+			TopicTitle string `json:"topic_title"`
+			IsInvalid  int    `json:"is_invalid"`
+			Actionlog  struct {
+				ActType int    `json:"act_type"`
+				ActCode int    `json:"act_code"`
+				Oid     string `json:"oid"`
+				UUID    int64  `json:"uuid"`
+				Cardid  string `json:"cardid"`
+				Lcardid string `json:"lcardid"`
+				Uicode  string `json:"uicode"`
+				Luicode string `json:"luicode"`
+				Fid     string `json:"fid"`
+				Lfid    string `json:"lfid"`
+				Ext     string `json:"ext"`
+			} `json:"actionlog"`
+		} `json:"topic_struct"`
+	} `json:"data"`
+}
