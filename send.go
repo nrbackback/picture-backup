@@ -229,7 +229,13 @@ func latestBlog(uid int64, cookie string) (blogs []Blog) {
 				content += "<br>"
 				content += fmt.Sprintf(`<a href="%s">被转发微博</a>`, rawWeiboURL)
 				content += "<br>"
-				content += rs.Text
+				text := rs.Text
+				if strings.HasSuffix(text, "展开</span>") {
+					if newContent := contentDetail(rs.Mblogid); newContent != "" {
+						text = newContent
+					}
+				}
+				content += text
 				content += "<br>"
 				if len(rs.PicInfos) != 0 {
 					for k, info := range rs.PicInfos {
