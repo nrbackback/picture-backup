@@ -9,9 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -91,27 +89,8 @@ func loadConfig() {
 
 func main() {
 	loadConfig()
-
-	// 每隔 interval 秒查询
-	ticker := time.NewTicker(time.Duration(config.Interval * time.Second.Nanoseconds()))
+	setLogoutput()
 	checkAndSend()
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				setLogoutput()
-				checkAndSend()
-			}
-		}
-	}()
-	var s os.Signal
-	defer func() {
-		logrus.Info("got shutdown signal %s", s)
-	}()
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
-	s = <-shutdown
-	logger.Info("got shutdown signal %s", s)
 }
 
 func checkAndSend() {
@@ -127,7 +106,6 @@ func checkAndSend() {
 	}
 	globalStartTime = globalEndTime
 	globalEndTime += config.StartOffset
-	logger.Info("waiting for next inspection........")
 }
 
 func sendHtml(subject, body string) {
