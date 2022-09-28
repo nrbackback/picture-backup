@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -141,6 +142,9 @@ func getCookie() string {
 	if err != nil {
 		logger.Errorf("get cookie error", err)
 		return ""
+	}
+	if ctx.Resp == nil {
+		panic(errors.New("nil resp"))
 	}
 	v := ctx.Resp.Header.Get("Set-Cookie")
 	return v
